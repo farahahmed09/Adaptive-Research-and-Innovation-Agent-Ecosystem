@@ -1,0 +1,1 @@
+# Adaptive-Research-and-Innovation-Agent-Ecosystem
