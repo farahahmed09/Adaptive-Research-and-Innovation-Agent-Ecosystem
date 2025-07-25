@@ -10,7 +10,7 @@
         .dashboard-container {
             max-width: 900px;
             margin: 40px auto;
-            background-color: #34495e;
+            background-color: #34495e; /* Keep original background for display */
             padding: 30px;
             border-radius: 8px;
             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
@@ -160,23 +160,47 @@
             text-align: center;
         }
 
-        /* NEW: Styles for the Markdown rendered content */
+        /* Styles for the Markdown rendered content */
         .markdown-report-container {
             margin-top: 30px;
             padding: 20px;
-            background-color: #2c3e50;
-            border: 1px solid #7f8c8d;
-            border-radius: 4px;
+            background-color: #2c3e50; /* Keep this background */
+            border: 1px solid #7f8c8d; /* Use old border color for consistency with current style */
+            border-radius: 4px; /* Consistent border-radius */
+            position: relative; /* For positioning download button */
         }
+        .markdown-report-container h3 { /* Style the h3 inside markdown-report-container */
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px; /* Space below title */
+            border-bottom: 1px solid #7f8c8d; /* Subtle line under title */
+            padding-bottom: 10px;
+            color: #ecf0f1; /* Ensure h3 color is consistent */
+        }
+        .markdown-report-container h3 .download-btn { /* Style for the new download button */
+            background-color: #27ae60; /* Green */
+            color: white;
+            padding: 8px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: background-color 0.3s ease;
+        }
+        .markdown-report-container h3 .download-btn:hover {
+            background-color: #229954; /* Darker green on hover */
+        }
+
         .markdown-content { /* Changed from pre to div and added class */
-            color: #ecf0f1;
+            color: #ecf0f1; /* Soft White */
             line-height: 1.6;
         }
         .markdown-content h1, .markdown-content h2, .markdown-content h3, .markdown-content h4 {
             color: #3498db; /* Blue headings */
             margin-top: 1.5em;
             margin-bottom: 0.8em;
-            border-bottom: 1px solid #5a7d9b; /* Subtle line under headings */
+            border-bottom: 1px solid #7f8c8d; /* Subtle line under headings */
             padding-bottom: 0.3em;
         }
         .markdown-content h1 { font-size: 2em; }
@@ -194,6 +218,7 @@
         .markdown-content ul, .markdown-content ol {
             margin-left: 1.5em;
             margin-bottom: 1em;
+            list-style-type: disc; /* Ensure bullet points */
         }
         .markdown-content li {
             margin-bottom: 0.5em;
@@ -205,11 +230,38 @@
         .markdown-content a:hover {
             text-decoration: underline;
         }
-        .markdown-content hr { /* Style for --- horizontal rule */
+        .markdown-content hr {
             border: none;
             border-top: 1px solid #7f8c8d;
             margin: 1.5em 0;
         }
+
+        /* NEW: PDF-specific export styles - Temporarily applied before html2canvas capture */
+        .pdf-export-temp {
+            background-color: white !important; /* White background for PDF */
+            color: black !important; /* Force black text */
+            padding: 20mm !important; /* A4 margin for PDF */
+            border: 0.5mm solid black !important; /* Thin black border */
+            box-shadow: none !important; /* Remove shadows for print */
+        }
+        .pdf-export-temp * { /* Apply to all child elements to ensure color override */
+            color: black !important;
+            background-color: transparent !important; /* No background colors inside */
+            box-shadow: none !important;
+            border-color: black !important;
+        }
+        /* Specific overrides for markdown-content within PDF */
+        .pdf-export-temp .markdown-content h1, 
+        .pdf-export-temp .markdown-content h2, 
+        .pdf-export-temp .markdown-content h3, 
+        .pdf-export-temp .markdown-content h4 {
+            color: black !important; /* Headings black */
+            border-bottom-color: black !important; /* Heading border black */
+        }
+        .pdf-export-temp .markdown-content strong { color: black !important; }
+        .pdf-export-temp .markdown-content em { color: black !important; }
+        .pdf-export-temp .markdown-content a { color: #0000FF !important; } /* Blue links in PDF */
+        .pdf-export-temp .feedback-section { display: none !important; } /* Hide feedback in PDF */
     </style>
 </head>
 <body>
@@ -243,24 +295,30 @@
             </div>
 
         <div class="markdown-report-container" id="reportContainer">
-            <h3>Full Report:</h3>
+            <h3>
+                Full Report:
+                <button class="download-btn" id="downloadReportBtn" style="display: none;">Download Report</button>
+            </h3>
             <div id="markdownReport" class="markdown-content"></div> 
         </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script> 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     
     <script>
         document.getElementById('generateBtn').addEventListener('click', generateIdeas);
         const queryInput = document.getElementById('queryInput');
         const creativityLevelSelect = document.getElementById('creativityLevel');
         const resultsArea = document.getElementById('resultsArea');
-        // CHANGED: reference the div, not pre
         const markdownReport = document.getElementById('markdownReport'); 
         const loadingIndicator = document.getElementById('loadingIndicator');
         const errorMessage = document.getElementById('errorMessage');
+        const downloadReportBtn = document.getElementById('downloadReportBtn');
 
         let currentQuery = '';
+        let lastMarkdownContent = ''; 
 
         async function generateIdeas() {
             const query = queryInput.value.trim();
@@ -272,9 +330,10 @@
             currentQuery = query;
 
             resultsArea.innerHTML = '<h3>Generated Ideas:</h3>';
-            markdownReport.innerHTML = ''; // CHANGED: Clear innerHTML for div
+            markdownReport.innerHTML = '';
             hideError();
             showLoading();
+            downloadReportBtn.style.display = 'none';
 
             try {
                 const response = await fetch(`/agents/innovation/ideas?query=${encodeURIComponent(query)}&creativity_level=${creativity}`);
@@ -317,8 +376,9 @@
                 }
 
                 if (data.markdown_report) {
-                    // CHANGED: Use marked.js to convert markdown to HTML
+                    lastMarkdownContent = data.markdown_report; 
                     markdownReport.innerHTML = marked.parse(data.markdown_report); 
+                    downloadReportBtn.style.display = 'inline-block';
                 }
 
             } catch (error) {
@@ -373,6 +433,83 @@
                 console.error('Feedback fetch error:', error);
             }
         }
+
+        // NEW: Download Report Function (PDF version)
+        downloadReportBtn.addEventListener('click', async () => {
+            if (!lastMarkdownContent) {
+                displayError("No report content to download.");
+                return;
+            }
+
+            // Temporarily update button text
+            downloadReportBtn.textContent = 'Generating PDF...';
+            downloadReportBtn.disabled = true;
+
+            const reportElement = document.getElementById('markdownReport'); // Get the DIV with rendered HTML
+
+            // NEW: Apply PDF-specific styles before capturing
+            reportElement.classList.add('pdf-export-temp');
+            // Ensure DOM has time to update styles before screenshot
+            await new Promise(r => setTimeout(r, 50)); // Small delay for rendering
+
+            try {
+                const canvas = await html2canvas(reportElement, { 
+                    scale: 2, 
+                    useCORS: true,
+                    backgroundColor: null // Important: capture transparent background if body has one, to be replaced by PDF white
+                });
+
+                const imgData = canvas.toDataURL('image/jpeg', 1.0); // Use JPEG for smaller file size, 1.0 quality
+                const { jsPDF } = window.jspdf;
+
+                // PDF dimensions based on A4 (210mm x 297mm)
+                const pdf = new jsPDF('p', 'mm', 'a4'); 
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pdfHeight = pdf.internal.pageSize.getHeight();
+
+                // Calculate image dimensions to fit within PDF with margins
+                const imgHeight = canvas.height * pdfWidth / canvas.width;
+
+                let heightLeft = imgHeight;
+                let position = 0;
+                let pageNumber = 1;
+
+                pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
+                heightLeft -= pdfHeight;
+
+                while (heightLeft > 0) {
+                    position = heightLeft - imgHeight;
+                    pdf.addPage();
+                    pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
+                    heightLeft -= pdfHeight;
+                    pageNumber++;
+                }
+
+                // Add page numbers
+                const totalPages = pdf.internal.getNumberOfPages();
+                for (let i = 1; i <= totalPages; i++) {
+                    pdf.setPage(i);
+                    pdf.setFontSize(10);
+                    pdf.text(`Page ${i} of ${totalPages}`, pdfWidth / 2, pdfHeight - 10, { align: 'center' });
+                }
+
+                const filename = `report_${currentQuery.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`;
+                pdf.save(filename);
+
+                alert('PDF report downloaded successfully!');
+
+            } catch (error) {
+                console.error('Error generating PDF:', error);
+                displayError('Failed to generate PDF. Check console for details.');
+                alert('Failed to generate PDF. See console for errors.');
+            } finally {
+                // NEW: Remove PDF-specific styles after capturing
+                reportElement.classList.remove('pdf-export-temp');
+                downloadReportBtn.textContent = 'Download Report';
+                downloadReportBtn.disabled = false;
+            }
+        });
+
 
         function showLoading() {
             loadingIndicator.style.display = 'block';
