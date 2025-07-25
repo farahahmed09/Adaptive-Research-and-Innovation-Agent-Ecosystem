@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>R&D Dashboard - Gen AI</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <style>
+        /* Specific styles for dashboard for better layout */
+        .dashboard-container {
+            max-width: 900px;
+            margin: 40px auto;
+            background-color: #34495e;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #7f8c8d;
+            padding-bottom: 15px;
+        }
+        .header h1 {
+            margin: 0;
+            color: #ecf0f1;
+        }
+        .header .logout-btn {
+            background-color: #e74c3c;
+            color: white;
+            padding: 8px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9em;
+        }
+        .header .logout-btn:hover {
+            background-color: #c0392b;
+        }
+        .chat-section {
+            margin-bottom: 30px;
+        }
+        .chat-input-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .chat-input-group input[type="text"] {
+            flex-grow: 1;
+            padding: 12px;
+            border-radius: 4px;
+            border: 1px solid #7f8c8d;
+            background-color: #2c3e50;
+            color: #ecf0f1;
+        }
+        .chat-input-group select {
+            padding: 12px;
+            border-radius: 4px;
+            border: 1px solid #7f8c8d;
+            background-color: #2c3e50;
+            color: #ecf0f1;
+        }
+        .chat-input-group button {
+            padding: 12px 20px;
+            background-color: #3498db; /* Blue */
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .chat-input-group button:hover {
+            background-color: #2980b9; /* Darker blue */
+        }
+        .results-area {
+            background-color: #2c3e50;
+            border: 1px solid #7f8c8d;
+            border-radius: 4px;
+            padding: 20px;
+            min-height: 200px;
+            overflow-y: auto;
+        }
+        .results-area h3 {
+            color: #ecf0f1;
+            margin-top: 0;
+        }
+        .result-item {
+            background-color: #3f5872; /* Slightly darker than container */
+            margin-bottom: 15px;
+            padding: 15px;
+            border-radius: 6px;
+            position: relative;
+        }
+        .result-item h4 {
+            color: #95a5a6;
+            margin-top: 0;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #7f8c8d;
+            padding-bottom: 5px;
+        }
+        .result-item p {
+            color: #bdc3c7;
+            line-height: 1.6;
+        }
+        .markdown-report-container {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #2c3e50;
+            border: 1px solid #7f8c8d;
+            border-radius: 4px;
+        }
+        .markdown-report-container pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            background-color: #1e2a3a;
+            padding: 15px;
+            border-radius: 4px;
+            color: #ecf0f1;
+            overflow-x: auto;
+        }
+        .loading-indicator {
+            text-align: center;
+            margin-top: 20px;
+            color: #3498db;
+            font-weight: bold;
+            display: none; /* Hidden by default */
+        }
+        .error-message {
+            color: #e74c3c;
+            background-color: #fce4e4;
+            border: 1px solid #e74c3c;
+            padding: 10px;
+            margin-bottom: 15px;
+            border-radius: 4px;
+            font-weight: bold;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <div class="header">
+            <h1>AI R&D Dashboard</h1>
+            <form action="/logout" method="post">
+                <button type="submit" class="logout-btn">Logout</button>
+            </form>
+        </div>
+
+        <div class="chat-section">
+            <h3>Generate New Ideas</h3>
+            <div class="chat-input-group">
+                <input type="text" id="queryInput" placeholder="Enter your research query (e.g., AI in healthcare, sustainable tech)...">
+                <select id="creativityLevel">
+                    <option value="low">Low Creativity</option>
+                    <option value="medium" selected>Medium Creativity</option>
+                    <option value="high">High Creativity</option>
+                </select>
+                <button id="generateBtn">Generate Ideas</button>
+            </div>
+            <div class="loading-indicator" id="loadingIndicator">
+                Generating ideas... Please wait.
+            </div>
+            <div class="error-message" id="errorMessage" style="display: none;"></div>
+        </div>
+
+        <div class="results-area" id="resultsArea">
+            <h3>Generated Ideas:</h3>
+            </div>
+
+        <div class="markdown-report-container" id="reportContainer">
+            <h3>Full Report:</h3>
+            <pre id="markdownReport"></pre>
+        </div>
+    </div>
+
+    <script>
+        // JavaScript for handling interaction
+        document.getElementById('generateBtn').addEventListener('click', generateIdeas);
+        const queryInput = document.getElementById('queryInput');
+        const creativityLevelSelect = document.getElementById('creativityLevel');
+        const resultsArea = document.getElementById('resultsArea');
+        const markdownReport = document.getElementById('markdownReport');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const errorMessage = document.getElementById('errorMessage');
+
+        async function generateIdeas() {
+            const query = queryInput.value.trim();
+            const creativity = creativityLevelSelect.value;
+            if (!query) {
+                displayError("Please enter a research query.");
+                return;
+            }
+
+            resultsArea.innerHTML = '<h3>Generated Ideas:</h3>'; // Clear previous results
+            markdownReport.textContent = ''; // Clear previous report
+            hideError();
+            showLoading();
+
+            try {
+                // Make API call to our Innovation Agent endpoint
+                const response = await fetch(`/agents/innovation/ideas?query=${encodeURIComponent(query)}&creativity_level=${creativity}`);
+                const data = await response.json();
+
+                if (!response.ok) {
+                    displayError(data.detail || 'An error occurred during idea generation.');
+                    return;
+                }
+
+                hideLoading();
+
+                if (data.generated_ideas && data.generated_ideas.length > 0) {
+                    data.generated_ideas.forEach((idea, index) => {
+                        const ideaDiv = document.createElement('div');
+                        ideaDiv.className = 'result-item';
+                        ideaDiv.innerHTML = `
+                            <h4>Idea ${index + 1}: ${idea.title || 'Untitled'}</h4>
+                            <p><strong>Description:</strong> ${idea.brief_description || 'No description provided.'}</p>
+                            <p><strong>Potential Impact:</strong> ${idea.potential_impact || 'No impact provided.'}</p>
+                        `;
+                        resultsArea.appendChild(ideaDiv);
+                    });
+                } else {
+                    resultsArea.innerHTML += '<p>No ideas were generated for this query. Please try a different query or creativity level.</p>';
+                }
+
+                if (data.markdown_report) {
+                    markdownReport.textContent = data.markdown_report; // Display raw markdown
+                    // Optional: Use a markdown rendering library like 'marked' if you want rich HTML for the report
+                    // For that, you'd need to include the library and then:
+                    // markdownReport.innerHTML = marked.parse(data.markdown_report);
+                }
+
+            } catch (error) {
+                hideLoading();
+                displayError('Network error or unable to connect to the AI system. Please try again.');
+                console.error('Fetch error:', error);
+            }
+        }
+
+        function showLoading() {
+            loadingIndicator.style.display = 'block';
+        }
+
+        function hideLoading() {
+            loadingIndicator.style.display = 'none';
+        }
+
+        function displayError(message) {
+            errorMessage.textContent = message;
+            errorMessage.style.display = 'block';
+        }
+
+        function hideError() {
+            errorMessage.style.display = 'none';
+        }
+
+        // Simple login check (client-side, not secure) to redirect if not logged in
+        // This needs server-side session management for real security
+        // For now, if you manually navigate here without logging in, it won't force you back.
+        // We'll add basic session management in FastAPI.
+        // window.onload = () => {
+        //     // You might check for a cookie here, but server-side is preferred
+        //     // if (!document.cookie.includes('session_id')) {
+        //     //     window.location.href = '/login';
+        //     // }
+        // };
+
+    </script>
+</body>
+</html>
