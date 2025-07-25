@@ -175,7 +175,6 @@
     </div>
 
     <script>
-        // JavaScript for handling interaction
         document.getElementById('generateBtn').addEventListener('click', generateIdeas);
         const queryInput = document.getElementById('queryInput');
         const creativityLevelSelect = document.getElementById('creativityLevel');
@@ -198,7 +197,6 @@
             showLoading();
 
             try {
-                // Make API call to our Innovation Agent endpoint
                 const response = await fetch(`/agents/innovation/ideas?query=${encodeURIComponent(query)}&creativity_level=${creativity}`);
                 const data = await response.json();
 
@@ -225,10 +223,7 @@
                 }
 
                 if (data.markdown_report) {
-                    markdownReport.textContent = data.markdown_report; // Display raw markdown
-                    // Optional: Use a markdown rendering library like 'marked' if you want rich HTML for the report
-                    // For that, you'd need to include the library and then:
-                    // markdownReport.innerHTML = marked.parse(data.markdown_report);
+                    markdownReport.textContent = data.markdown_report;
                 }
 
             } catch (error) {
@@ -254,18 +249,6 @@
         function hideError() {
             errorMessage.style.display = 'none';
         }
-
-        // Simple login check (client-side, not secure) to redirect if not logged in
-        // This needs server-side session management for real security
-        // For now, if you manually navigate here without logging in, it won't force you back.
-        // We'll add basic session management in FastAPI.
-        // window.onload = () => {
-        //     // You might check for a cookie here, but server-side is preferred
-        //     // if (!document.cookie.includes('session_id')) {
-        //     //     window.location.href = '/login';
-        //     // }
-        // };
-
     </script>
 </body>
 </html>

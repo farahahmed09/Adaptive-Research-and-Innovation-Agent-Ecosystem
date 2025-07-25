@@ -1,6 +1,9 @@
 # utils/external_api_client.py
 
-import requests # Import the requests library for making HTTP requests
+import requests
+import time # For basic rate limiting/backoff
+import random # For simple delay
+import xml.etree.ElementTree as ET # NEW: For parsing XML (ArXiv uses Atom feed)
 
 class NewsApiClient:
     """
@@ -8,96 +11,137 @@ class NewsApiClient:
     This handles fetching headlines and basic error checking.
     """
     def __init__(self, api_key: str):
-        # The base URL for the NewsAPI endpoints
         self.base_url = "https://newsapi.org/v2/"
-        self.api_key = api_key # Store the API key provided during initialization
-
-        # Basic check for API key presence
+        self.api_key = api_key
         if not self.api_key:
             print("WARNING: News API key is missing. NewsApiClient may not function correctly.")
 
     async def fetch_top_headlines(self, query: str = "technology", language: str = "en", page_size: int = 5):
-        """
-        Fetches top headlines related to a specific query from NewsAPI.org.
-
-        Args:
-            query (str): The keyword to search for (e.g., "AI trends", "renewable energy").
-                         NewsAPI uses this for the 'q' parameter in 'everything' endpoint,
-                         or as a category hint for 'top-headlines'.
-            language (str): The language of the articles (e.g., "en" for English).
-            page_size (int): The number of articles to return (max 100 for NewsAPI free tier).
-
-        Returns:
-            list: A list of dictionaries, where each dictionary represents an article.
-                  Returns an empty list if there's an error or no articles found.
-        """
         print(f"NewsApiClient: Fetching headlines for query '{query}'...")
-        endpoint = "everything" # Using the 'everything' endpoint for more specific queries
+        endpoint = "everything"
 
         params = {
-            "q": query,           # The search query
-            "language": language, # Article language
-            "pageSize": page_size,# Number of results
-            "apiKey": self.api_key # Your API key
+            "q": query,
+            "language": language,
+            "pageSize": page_size,
+            "apiKey": self.api_key
         }
 
         try:
-            # Make the GET request to the NewsAPI
-            # We use await requests.get if we were using an async HTTP client like httpx,
-            # but 'requests' is synchronous. We'll simulate async for consistency with FastAPI.
-            # In a real async app, you'd wrap synchronous calls in run_in_threadpool or use httpx.
             response = requests.get(f"{self.base_url}{endpoint}", params=params)
-
-            # raise_for_status() will raise an HTTPError for bad responses (4xx or 5xx)
             response.raise_for_status()
-
-            # Parse the JSON response
             data = response.json()
 
-            # Check for NewsAPI specific errors
             if data.get("status") == "error":
                 print(f"NewsAPI error: {data.get('code')} - {data.get('message')}")
                 return []
 
-            # Return the list of articles
-            return data.get("articles", [])
+            articles = data.get("articles", [])
+            processed_articles = []
+            for article in articles:
+                processed_articles.append({
+                    "source": "NewsAPI",
+                    "title": article.get('title'),
+                    "summary": article.get('description'),
+                    "content": article.get('content'),
+                    "url": article.get('url'),
+                    "published_date": article.get('publishedAt'),
+                    "authors": article.get('author')
+                })
+            return processed_articles
 
-        except requests.exceptions.HTTPError as http_err:
-            # Handle HTTP errors (e.g., 401 Unauthorized, 404 Not Found)
-            print(f"HTTP error occurred: {http_err} - Response: {response.text}")
-            return []
-        except requests.exceptions.ConnectionError as conn_err:
-            # Handle network-related errors (e.g., no internet connection)
-            print(f"Connection error occurred: {conn_err}")
-            return []
-        except requests.exceptions.Timeout as timeout_err:
-            # Handle request timeout errors
-            print(f"Timeout error occurred: {timeout_err}")
-            return []
-        except requests.exceptions.RequestException as req_err:
-            # Handle any other general request exceptions
-            print(f"An unexpected error occurred: {req_err}")
+        except requests.exceptions.RequestException as e:
+            print(f"NewsAPI request error: {e}")
             return []
         except Exception as e:
-            # Catch any other unforeseen errors
-            print(f"An unknown error occurred during API call: {e}")
+            print(f"An unknown error occurred during NewsAPI call: {e}")
             return []
 
-# Example usage for testing this client directly (optional)
+
+# NEW CLIENT: ArXiv API Client (ONLY additional source)
+class ArxivClient:
+    """
+    Client for interacting with the ArXiv API.
+    Used for fetching preprints and scholarly articles.
+    """
+    def __init__(self):
+        self.base_url = "http://export.arxiv.org/api/query?"
+        self.ATOM_NAMESPACE = {'atom': 'http://www.w3.org/2005/Atom'}
+
+    async def search_articles(self, query: str, limit: int = 5):
+        print(f"ArxivClient: Searching articles for query '{query}'...")
+        params = {
+            "search_query": f"all:{query}",
+            "start": 0,
+            "max_results": limit,
+            "sortBy": "relevance",
+            "sortOrder": "descending"
+        }
+
+        try:
+            response = requests.get(self.base_url, params=params)
+            response.raise_for_status()
+            
+            root = ET.fromstring(response.content)
+            
+            articles = []
+            for entry in root.findall('atom:entry', self.ATOM_NAMESPACE):
+                title = entry.find('atom:title', self.ATOM_NAMESPACE).text if entry.find('atom:title', self.ATOM_NAMESPACE) is not None else None
+                summary = entry.find('atom:summary', self.ATOM_NAMESPACE).text if entry.find('atom:summary', self.ATOM_NAMESPACE) is not None else None
+                
+                url = None
+                for link in entry.findall('atom:link', self.ATOM_NAMESPACE):
+                    if link.get('title') == 'Original' or link.get('rel') == 'alternate':
+                        url = link.get('href')
+                        break
+
+                published = entry.find('atom:published', self.ATOM_NAMESPACE).text if entry.find('atom:published', self.ATOM_NAMESPACE) is not None else None
+                
+                authors = []
+                for author_elem in entry.findall('atom:author', self.ATOM_NAMESPACE):
+                    name = author_elem.find('atom:name', self.ATOM_NAMESPACE).text
+                    if name:
+                        authors.append(name)
+                
+                articles.append({
+                    "source": "ArXiv",
+                    "title": title.strip() if title else None,
+                    "summary": summary.strip() if summary else None,
+                    "content": summary.strip() if summary else None,
+                    "url": url,
+                    "published_date": published,
+                    "authors": authors if authors else None
+                })
+            return articles
+
+        except requests.exceptions.RequestException as e:
+            print(f"ArXiv request error: {e}")
+            return []
+        except ET.ParseError as e:
+            print(f"ArXiv XML parse error: {e}")
+            return []
+        except Exception as e:
+            print(f"An unknown error occurred during ArXiv call: {e}")
+            return []
+
+# Example usage for testing (Optional - for direct test of this file)
 if __name__ == "__main__":
     import asyncio
-    from config import NEWS_API_KEY # Ensure config.py can be imported
+    from config import NEWS_API_KEY
+    
+    async def test_clients():
+        print("\n--- Testing NewsAPI Client ---")
+        news_client = NewsApiClient(NEWS_API_KEY)
+        news_articles = await news_client.fetch_top_headlines(query="AI ethics", page_size=2)
+        print(f"Fetched {len(news_articles)} news articles.")
+        for article in news_articles:
+            print(f"- [NewsAPI] {article.get('title')}")
 
-    async def test_client():
-        client = NewsApiClient(NEWS_API_KEY)
-        articles = await client.fetch_top_headlines(query="artificial intelligence", page_size=3)
-        if articles:
-            for i, article in enumerate(articles):
-                print(f"\n--- Article {i+1} ---")
-                print(f"Title: {article.get('title', 'N/A')}")
-                print(f"Source: {article.get('source', {}).get('name', 'N/A')}")
-                print(f"Description: {article.get('description', 'N/A')[:100]}...")
-        else:
-            print("No articles fetched or an error occurred.")
+        print("\n--- Testing ArXiv Client ---")
+        arxiv_client = ArxivClient()
+        arxiv_articles = await arxiv_client.search_articles(query="quantum machine learning", limit=2)
+        print(f"Fetched {len(arxiv_articles)} ArXiv articles.")
+        for article in arxiv_articles:
+            print(f"- [ArXiv] {article.get('title')}")
 
-    asyncio.run(test_client())
+    asyncio.run(test_clients())

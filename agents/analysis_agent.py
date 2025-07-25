@@ -1,8 +1,12 @@
 # agents/analysis_agent.py
 
-# We might need to import external libraries for more complex analysis later (e.g., NLTK, spaCy, sklearn)
-# import nltk # Example for natural language processing
-# nltk.download('punkt') # Download necessary data for nltk if used
+# ONLY basic analysis (no external NLP/ML libraries like spacy, sklearn, NLTK)
+import logging # Import logging
+
+# Configure logging for this module
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# No global spaCy model loaded here for this basic version
 
 class AnalysisAgent:
     """
@@ -11,93 +15,107 @@ class AnalysisAgent:
     and generating intermediate insights.
     """
     def __init__(self):
-        print("Analysis Agent initialized.")
+        logging.info("Analysis Agent initialized (basic version).")
+        # No NLTK/spaCy/sklearn initialization needed for this basic version
+
 
     async def analyze_data_and_generate_insights(self, research_data: list):
-        """
-        Analyzes the preprocessed data from the Research Agent and generates insights.
-
-        Args:
-            research_data (list): A list of dictionaries, where each dict represents
-                                a preprocessed article/data point from the Research Agent.
-
-        Returns:
-            list: A list of dictionaries, each representing a generated insight.
-                  Returns an empty list if no insights are generated.
-        """
-        print(f"Analysis Agent: Analyzing {len(research_data)} data points...")
+        logging.info(f"Analysis Agent: Analyzing {len(research_data)} data points...")
+        logging.debug(f"Analysis Agent received research_data (first 2): {research_data[:2]}")
         insights = []
 
         if not research_data:
-            print("Analysis Agent: No research data provided for analysis.")
+            logging.info("Analysis Agent: No research data provided for analysis.")
             return []
 
-        # --- Placeholder for Innovative Algorithms ---
-        # This is where your "innovative algorithms" will go.
-        # For now, we'll implement very basic logic:
-        # 1. Count keywords (simple trend detection)
-        # 2. Summarize each article into an insight
-        # --------------------------------------------
-
-        keyword_counts = {}
+        # Wrap item processing in a try/except to catch errors per item
         for item in research_data:
-            # Basic keyword extraction from title and summary
-            text = f"{item.get('title', '')} {item.get('summary', '')}".lower()
+            try:
+                if not isinstance(item, dict):
+                    logging.warning(f"Analysis Agent received non-dictionary item: {item}. Skipping.")
+                    continue
 
-            # Simple keyword counting - replace with more sophisticated NLP later
-            if "ai" in text:
-                keyword_counts["ai"] = keyword_counts.get("ai", 0) + 1
-            if "innovation" in text:
-                keyword_counts["innovation"] = keyword_counts.get("innovation", 0) + 1
-            if "breakthrough" in text:
-                keyword_counts["breakthrough"] = keyword_counts.get("breakthrough", 0) + 1
-            # Add more keywords relevant to your project
+                logging.debug(f"Processing item: Source='{item.get('source', 'N/A')}', Title='{item.get('title', 'N/A')[:50]}...'")
 
-            # Generate a simple insight for each article
-            insight = {
-                "source_title": item.get('title'),
-                "insight_summary": f"Key takeaway: {item.get('summary', '')[:150]}...", # Truncate summary
-                "relevance_score": 0.5, # Placeholder score
-                "data_source_url": item.get('source_url'),
-                # You could add a sentiment score here later using a library like TextBlob
-                # "sentiment": "neutral"
-            }
-            insights.append(insight)
+                title = str(item.get('title', ''))
+                summary = str(item.get('summary', ''))
+                content = str(item.get('content', ''))
+                url = item.get('url')
 
-        # Add a general trend insight based on keyword counts
-        if keyword_counts:
-            trend_insight = {
-                "type": "overall_trend_analysis",
-                "description": "Identified popular keywords in current research data.",
-                "keywords_found": keyword_counts,
-                "strongest_trend": max(keyword_counts, key=keyword_counts.get) if keyword_counts else None
-            }
-            insights.append(trend_insight)
-            print(f"Analysis Agent: Identified trends: {keyword_counts}")
+                full_text = f"{title} {summary} {content}".lower()
+                
+                # Basic keyword extraction (no spaCy/NLTK for this version)
+                words = full_text.split()
+                basic_stop_words = set(['a', 'an', 'the', 'is', 'are', 'and', 'or', 'in', 'of', 'to', 'for', 'on', 'with', 'by']) # Very basic list
+                filtered_words = [word for word in words if word.isalnum() and word not in basic_stop_words]
 
-        print(f"Analysis Agent: Generated {len(insights)} insights.")
+                entities = [] # No entities for this basic version
+                
+                insight = {
+                    "source": item.get('source', 'N/A'),
+                    "title": title,
+                    "insight_summary": f"Key takeaway: {summary[:150]}...",
+                    "extracted_keywords": list(set(filtered_words[:5])),
+                    "named_entities": entities, # This will be an empty list for now
+                    "data_source_url": url,
+                    "relevance_score": 0.5,
+                }
+                insights.append(insight)
+            except Exception as e:
+                logging.error(f"Error processing individual item from source '{item.get('source', 'Unknown')}' with title '{item.get('title', 'Unknown')[:50]}...': {e}")
+                logging.exception("Full traceback for item processing error:")
+                continue # Skip this problematic item, try next one
+
+        # --- Overall Analysis (simple keyword counting) ---
+        if insights:
+            all_extracted_keywords_flat = []
+            for insight in insights:
+                all_extracted_keywords_flat.extend(insight.get('extracted_keywords', []))
+            
+            from collections import Counter
+            keyword_counts = Counter(all_extracted_keywords_flat)
+            
+            if keyword_counts:
+                overall_top_terms = [word for word, count in keyword_counts.most_common(10)]
+                overall_trend_insight = {
+                    "type": "overall_trend_analysis",
+                    "description": "Identified popular keywords/themes across all collected data.",
+                    "overall_top_terms": overall_top_terms,
+                    "num_processed_items": len(insights)
+                }
+                insights.append(overall_trend_insight)
+            else:
+                logging.info("No common keywords found for overall trend analysis.")
+
+        logging.info(f"Analysis Agent: Generated {len(insights)} insights.")
         return insights
 
 # Example usage for testing this agent directly (optional)
-if __name__ == "__main__":
-    import asyncio
+# if __name__ == "__main__":
+#     import asyncio
+#     import sys
+#     import os
+#     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-    async def test_agent():
-        # Dummy data to simulate output from Research Agent
-        dummy_research_data = [
-            {"title": "AI's new breakthrough in medical imaging", "summary": "Researchers achieve high accuracy with a novel AI algorithm.", "source_url": "http://example.com/ai-med"},
-            {"title": "Innovation in renewable energy storage", "summary": "New battery tech promises longer lifespan for green energy.", "source_url": "http://example.com/energy-tech"},
-            {"title": "The future of AI ethics: a new perspective", "summary": "Experts debate the moral implications of advanced AI systems.", "source_url": "http://example.com/ai-ethics"},
-        ]
+#     async def test_agent():
+#         dummy_research_data = [
+#             {"source": "NewsAPI", "title": "Sample AI Article 1", "summary": "AI is transforming healthcare.", "content": "Long content about AI in medicine."},
+#             {"source": "ArXiv", "title": "Machine Learning in Genomics", "summary": "Deep dive into ML applications for DNA sequencing.", "content": "Abstract of academic paper."},
+#             {"source": "Custom", "title": "Article with no summary", "summary": None, "content": "Just some content here."},
+#             "This is not a dictionary item and should be skipped by the agent"
+#         ]
+            
+#         agent = AnalysisAgent()
+#         insights = await agent.analyze_data_and_generate_insights(dummy_research_data)
+        
+#         for i, insight in enumerate(insights):
+#             print(f"\n--- Insight {i+1} ---")
+#             print(f"Source: {insight.get('source', 'N/A')}")
+#             print(f"Title: {insight.get('title', 'N/A')}")
+#             print(f"Summary: {insight.get('insight_summary', 'N/A')}")
+#             if 'extracted_keywords' in insight:
+#                 print(f"Keywords: {insight['extracted_keywords']}")
+#             if 'named_entities' in insight and insight['named_entities']:
+#                 print(f"Entities: {insight['named_entities']}")
 
-        agent = AnalysisAgent()
-        insights = await agent.analyze_data_and_generate_insights(dummy_research_data)
-
-        for i, insight in enumerate(insights):
-            print(f"\n--- Insight {i+1} ---")
-            print(f"Type: {insight.get('type', 'Article Insight')}")
-            print(f"Summary/Description: {insight.get('insight_summary', insight.get('description'))}")
-            if 'keywords_found' in insight:
-                print(f"Keywords: {insight['keywords_found']}")
-
-    asyncio.run(test_agent())
+#     asyncio.run(test_agent())
