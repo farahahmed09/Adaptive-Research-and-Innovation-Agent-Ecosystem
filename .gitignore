@@ -1,0 +1,17 @@
+# Virtual environment
+venv/
+
+# Byte-code files
+*.pyc
+__pycache__/
+
+# Environment variables file (for API keys, etc.)
+.env
+
+# Editor/IDE specific files
+.vscode/ # VS Code settings for the workspace
+.idea/   # PyCharm project files
+
+# Operating System specific files
+.DS_Store # macOS specific hidden files
+Thumbs.db # Windows thumbnail cache
