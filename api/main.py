@@ -8,12 +8,13 @@ import httpx
 import asyncio
 import logging # NEW: For enhanced debugging
 import traceback # NEW: For capturing full error details
+from pydantic import BaseModel 
 
 # Configure basic logging for main.py. Set to DEBUG for maximum verbosity.
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Import database components
-from database.models import SessionLocal, create_db_tables, User
+from database.models import SessionLocal, create_db_tables, User, Feedback
 
 # Import agents
 from agents.research_agent import ResearchAgent
@@ -24,6 +25,17 @@ from agents.innovation_agent import InnovationAgent
 from config import NEWS_API_KEY, GEMINI_API_KEY
 # GNEWS_API_KEY is defined in config.py now, but not directly used for ResearchAgent init in main.py this way
 # from config import GNEWS_API_KEY # Keep commented if ResearchAgent init doesn't need it directly here
+
+# ----------------------------------------------------
+# Pydantic Model for Feedback Request (NEW)
+# ----------------------------------------------------
+# This defines the expected structure of the JSON data coming in for feedback
+class FeedbackRequest(BaseModel):
+    query: str
+    idea_title: str | None = None
+    idea_description_snippet: str | None = None
+    feedback_type: str # e.g., "positive", "negative", "neutral"
+    comment: str | None = None
 
 # ----------------------------------------------------
 # 1. FastAPI Application Instance
@@ -367,6 +379,42 @@ async def get_innovation_ideas( # THIS MUST BE 'async def'
         logging.critical(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Internal server error during idea generation: {type(e).__name__}: {e}")
 
+@app.post("/feedback/")
+async def submit_feedback(
+    feedback_data: FeedbackRequest, # Data comes in as a Pydantic model
+    user_id: str = Depends(require_login), # Requires authenticated user
+    db: Session = Depends(get_db) # Requires database session
+):
+    """
+    Receives and stores user feedback on generated ideas.
+    """
+    try:
+        # Get the actual User object
+        user = db.query(User).filter(User.id == int(user_id)).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found.")
+
+        # Create a new Feedback entry
+        new_feedback = Feedback(
+            user_id=user.id,
+            query=feedback_data.query,
+            idea_title=feedback_data.idea_title,
+            idea_description_snippet=feedback_data.idea_description_snippet,
+            feedback_type=feedback_data.feedback_type,
+            comment=feedback_data.comment
+        )
+
+        db.add(new_feedback)
+        db.commit()
+        db.refresh(new_feedback)
+
+        logging.info(f"Feedback submitted by user {user.username} (ID: {user.id}). Type: {new_feedback.feedback_type}")
+        return {"message": "Feedback submitted successfully!", "feedback_id": new_feedback.id}
+
+    except Exception as e:
+        logging.error(f"Error submitting feedback: {type(e).__name__}: {e}")
+        logging.exception("Full traceback for feedback submission error:")
+        raise HTTPException(status_code=500, detail=f"Failed to submit feedback: {type(e).__name__}: {e}")
 # ----------------------------------------------------
 # 8. Running the Application (Typically via Uvicorn)
 # ----------------------------------------------------

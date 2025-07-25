@@ -103,28 +103,51 @@
             color: #bdc3c7;
             line-height: 1.6;
         }
-        .markdown-report-container {
-            margin-top: 30px;
-            padding: 20px;
-            background-color: #2c3e50;
-            border: 1px solid #7f8c8d;
-            border-radius: 4px;
+        /* Feedback specific styles */
+        .feedback-section {
+            margin-top: 15px;
+            border-top: 1px dashed #7f8c8d;
+            padding-top: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
         }
-        .markdown-report-container pre {
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            background-color: #1e2a3a;
-            padding: 15px;
-            border-radius: 4px;
-            color: #ecf0f1;
-            overflow-x: auto;
+        .feedback-section label {
+            margin: 0;
+            font-weight: normal;
+        }
+        .feedback-buttons button {
+            width: auto;
+            padding: 8px 12px;
+            font-size: 0.9em;
+            border-radius: 20px;
+            transition: background-color 0.2s ease;
+        }
+        .feedback-buttons .positive {
+            background-color: #27ae60;
+        }
+        .feedback-buttons .positive:hover {
+            background-color: #229954;
+        }
+        .feedback-buttons .negative {
+            background-color: #e74c3c;
+        }
+        .feedback-buttons .negative:hover {
+            background-color: #c0392b;
+        }
+        .feedback-message {
+            font-size: 0.9em;
+            color: #2ecc71;
+            margin-left: 10px;
+            display: none;
         }
         .loading-indicator {
             text-align: center;
             margin-top: 20px;
             color: #3498db;
             font-weight: bold;
-            display: none; /* Hidden by default */
+            display: none;
         }
         .error-message {
             color: #e74c3c;
@@ -135,6 +158,57 @@
             border-radius: 4px;
             font-weight: bold;
             text-align: center;
+        }
+
+        /* NEW: Styles for the Markdown rendered content */
+        .markdown-report-container {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #2c3e50;
+            border: 1px solid #7f8c8d;
+            border-radius: 4px;
+        }
+        .markdown-content { /* Changed from pre to div and added class */
+            color: #ecf0f1;
+            line-height: 1.6;
+        }
+        .markdown-content h1, .markdown-content h2, .markdown-content h3, .markdown-content h4 {
+            color: #3498db; /* Blue headings */
+            margin-top: 1.5em;
+            margin-bottom: 0.8em;
+            border-bottom: 1px solid #5a7d9b; /* Subtle line under headings */
+            padding-bottom: 0.3em;
+        }
+        .markdown-content h1 { font-size: 2em; }
+        .markdown-content h2 { font-size: 1.6em; }
+        .markdown-content h3 { font-size: 1.3em; }
+        .markdown-content p {
+            margin-bottom: 1em;
+        }
+        .markdown-content strong {
+            color: #f1c40f; /* Yellow for strong */
+        }
+        .markdown-content em {
+            color: #a6d8d8; /* Light blue for emphasis */
+        }
+        .markdown-content ul, .markdown-content ol {
+            margin-left: 1.5em;
+            margin-bottom: 1em;
+        }
+        .markdown-content li {
+            margin-bottom: 0.5em;
+        }
+        .markdown-content a {
+            color: #2ecc71; /* Green links */
+            text-decoration: none;
+        }
+        .markdown-content a:hover {
+            text-decoration: underline;
+        }
+        .markdown-content hr { /* Style for --- horizontal rule */
+            border: none;
+            border-top: 1px solid #7f8c8d;
+            margin: 1.5em 0;
         }
     </style>
 </head>
@@ -170,18 +244,23 @@
 
         <div class="markdown-report-container" id="reportContainer">
             <h3>Full Report:</h3>
-            <pre id="markdownReport"></pre>
+            <div id="markdownReport" class="markdown-content"></div> 
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script> 
+    
     <script>
         document.getElementById('generateBtn').addEventListener('click', generateIdeas);
         const queryInput = document.getElementById('queryInput');
         const creativityLevelSelect = document.getElementById('creativityLevel');
         const resultsArea = document.getElementById('resultsArea');
-        const markdownReport = document.getElementById('markdownReport');
+        // CHANGED: reference the div, not pre
+        const markdownReport = document.getElementById('markdownReport'); 
         const loadingIndicator = document.getElementById('loadingIndicator');
         const errorMessage = document.getElementById('errorMessage');
+
+        let currentQuery = '';
 
         async function generateIdeas() {
             const query = queryInput.value.trim();
@@ -190,9 +269,10 @@
                 displayError("Please enter a research query.");
                 return;
             }
+            currentQuery = query;
 
-            resultsArea.innerHTML = '<h3>Generated Ideas:</h3>'; // Clear previous results
-            markdownReport.textContent = ''; // Clear previous report
+            resultsArea.innerHTML = '<h3>Generated Ideas:</h3>';
+            markdownReport.innerHTML = ''; // CHANGED: Clear innerHTML for div
             hideError();
             showLoading();
 
@@ -211,25 +291,86 @@
                     data.generated_ideas.forEach((idea, index) => {
                         const ideaDiv = document.createElement('div');
                         ideaDiv.className = 'result-item';
+                        ideaDiv.setAttribute('data-idea-title', idea.title || `Idea ${index + 1}`);
+                        ideaDiv.setAttribute('data-idea-description-snippet', (idea.brief_description || '').substring(0, 100));
+
                         ideaDiv.innerHTML = `
                             <h4>Idea ${index + 1}: ${idea.title || 'Untitled'}</h4>
                             <p><strong>Description:</strong> ${idea.brief_description || 'No description provided.'}</p>
                             <p><strong>Potential Impact:</strong> ${idea.potential_impact || 'No impact provided.'}</p>
+                            <div class="feedback-section">
+                                <label>Was this idea useful?</label>
+                                <div class="feedback-buttons">
+                                    <button class="positive" data-feedback-type="positive">👍 Yes</button>
+                                    <button class="negative" data-feedback-type="negative">👎 No</button>
+                                </div>
+                                <span class="feedback-message" style="display: none;">Thanks!</span>
+                            </div>
                         `;
                         resultsArea.appendChild(ideaDiv);
+                    });
+                    document.querySelectorAll('.feedback-buttons button').forEach(button => {
+                        button.addEventListener('click', sendFeedback);
                     });
                 } else {
                     resultsArea.innerHTML += '<p>No ideas were generated for this query. Please try a different query or creativity level.</p>';
                 }
 
                 if (data.markdown_report) {
-                    markdownReport.textContent = data.markdown_report;
+                    // CHANGED: Use marked.js to convert markdown to HTML
+                    markdownReport.innerHTML = marked.parse(data.markdown_report); 
                 }
 
             } catch (error) {
                 hideLoading();
                 displayError('Network error or unable to connect to the AI system. Please try again.');
                 console.error('Fetch error:', error);
+            }
+        }
+
+        async function sendFeedback(event) {
+            const button = event.target;
+            const feedbackType = button.getAttribute('data-feedback-type');
+            const ideaDiv = button.closest('.result-item');
+            
+            const ideaTitle = ideaDiv.getAttribute('data-idea-title');
+            const ideaDescriptionSnippet = ideaDiv.getAttribute('data-idea-description-snippet');
+
+            const feedbackMessageSpan = ideaDiv.querySelector('.feedback-message');
+
+            const feedbackData = {
+                query: currentQuery,
+                idea_title: ideaTitle,
+                idea_description_snippet: ideaDescriptionSnippet,
+                feedback_type: feedbackType,
+                comment: ''
+            };
+
+            try {
+                const response = await fetch('/feedback/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(feedbackData)
+                });
+
+                if (response.ok) {
+                    feedbackMessageSpan.textContent = "Thanks!";
+                    feedbackMessageSpan.style.color = '#2ecc71';
+                    feedbackMessageSpan.style.display = 'inline';
+                    ideaDiv.querySelectorAll('.feedback-buttons button').forEach(btn => btn.disabled = true);
+                } else {
+                    const errorData = await response.json();
+                    feedbackMessageSpan.textContent = `Error: ${errorData.detail || 'Failed to submit.'}`;
+                    feedbackMessageSpan.style.color = '#e74c3c';
+                    feedbackMessageSpan.style.display = 'inline';
+                }
+            } catch (error) {
+                feedbackMessageSpan.textContent = "Network error. Try again.";
+                feedbackMessageSpan.style.color = '#e74c3c';
+                feedbackMessageSpan.style.display = 'inline';
+                console.error('Feedback fetch error:', error);
             }
         }
 

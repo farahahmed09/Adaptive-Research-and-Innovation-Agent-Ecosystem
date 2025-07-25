@@ -1,7 +1,7 @@
 body {
     font-family: Arial, sans-serif;
-    background-color: #2c3e50; /* Dark blue-grey */
-    color: #ecf0f1; /* Light grey */
+    background-color: #0A192F; /* Deep Navy Blue (Primary background) */
+    color: #E0E0E0; /* Soft White (Primary text color) */
     display: flex;
     justify-content: center;
     align-items: center;
@@ -10,16 +10,16 @@ body {
 }
 
 .login-container {
-    background-color: #34495e; /* Slightly lighter blue-grey */
+    background-color: #172A45; /* Slightly lighter, muted dark blue (Container background) */
     padding: 40px;
     border-radius: 8px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4); /* Darker shadow for depth */
     width: 350px;
     text-align: center;
 }
 
 h2 {
-    color: #ecf0f1;
+    color: #42A5F5; /* Medium Blue (Main headings) */
     margin-bottom: 25px;
 }
 
@@ -32,21 +32,22 @@ label {
     display: block;
     margin-bottom: 8px;
     font-weight: bold;
+    color: #A0AEC0; /* Muted grey-blue for labels */
 }
 
 input[type="text"],
 input[type="password"] {
     width: calc(100% - 20px); /* Account for padding */
     padding: 10px;
-    border: 1px solid #7f8c8d; /* Grey border */
+    border: 1px solid #334C6A; /* Subtle blue-grey border */
     border-radius: 4px;
-    background-color: #2c3e50;
-    color: #ecf0f1;
+    background-color: #0A192F; /* Same as body background for input fields */
+    color: #E0E0E0; /* Text color inside inputs */
     font-size: 1em;
 }
 
 button {
-    background-color: #27ae60; /* Green */
+    background-color: #42A5F5; /* Medium Blue (Action button) */
     color: white;
     padding: 12px 20px;
     border: none;
@@ -58,13 +59,13 @@ button {
 }
 
 button:hover {
-    background-color: #229954; /* Darker green on hover */
+    background-color: #1976D2; /* Darker Blue (Button hover) */
 }
 
 .error-message {
-    color: #e74c3c; /* Red */
-    background-color: #fce4e4; /* Light red background */
-    border: 1px solid #e74c3c;
+    color: #EF5350; /* Muted Red (Error text) */
+    background-color: #422a2a; /* Darker, desaturated red for background */
+    border: 1px solid #EF5350;
     padding: 10px;
     margin-bottom: 15px;
     border-radius: 4px;
@@ -74,11 +75,11 @@ button:hover {
 
 p {
     margin-top: 20px;
-    color: #bdc3c7; /* Lighter grey */
+    color: #A0AEC0; /* Lighter grey-blue for secondary text */
 }
 
 a {
-    color: #3498db; /* Blue */
+    color: #66BB6A; /* Green (Links - chosen for contrast and professionalism) */
     text-decoration: none;
 }
 
