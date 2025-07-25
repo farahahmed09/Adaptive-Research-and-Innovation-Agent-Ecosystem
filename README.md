@@ -1,4 +1,3 @@
-# Adaptive-Research-and-Innovation-Agent-Ecosystem
 # Gen AI Adaptive Research & Innovation Agent Ecosystem
 
 ## Project Overview
