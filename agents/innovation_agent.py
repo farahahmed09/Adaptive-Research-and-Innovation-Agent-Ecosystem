@@ -117,37 +117,3 @@ class InnovationAgent:
         print("Innovation Agent: Markdown report generated.")
         return report_content
 
-# Example usage for testing this agent directly (optional)
-if __name__ == "__main__":
-    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-    
-    from config import GEMINI_API_KEY
-
-    async def test_agent():
-        if not GEMINI_API_KEY:
-            print("GEMINI_API_KEY not found in .env. Cannot test Innovation Agent.")
-            return
-
-        dummy_insights = [
-            {"source_title": "AI in Medical Imaging", "insight_summary": "Deep learning models show promise in early cancer detection, but require large, diverse datasets."},
-            {"source_title": "Quantum Computing Breakthrough", "insight_summary": "New qubit stability achieved, pushing quantum computing closer to practical applications, but cooling remains an issue."},
-            {"source_title": "Sustainable Energy Storage", "insight_summary": "Novel solid-state battery technology offers high energy density and faster charging for EVs and grid storage, but manufacturing is complex."}
-        ]
-        
-        agent = InnovationAgent(GEMINI_API_KEY)
-        ideas = await agent.generate_ideas_from_insights(dummy_insights, creativity_level="high")
-        
-        if ideas:
-            print("\n--- Generated Ideas ---")
-            for idea in ideas:
-                print(f"Title: {idea.get('title')}")
-                print(f"Description: {idea.get('brief_description')}")
-                print(f"Impact: {idea.get('potential_impact')}\n")
-            
-            report = await agent.generate_markdown_report(ideas, "AI, Quantum, and Energy Innovation")
-            print("\n--- Generated Markdown Report ---")
-            print(report)
-        else:
-            print("No ideas generated.")
-
-    asyncio.run(test_agent())

@@ -17,7 +17,6 @@ class User(Base):
     # Define a relationship to Feedback
     feedbacks = relationship("Feedback", back_populates="user")
 
-# CLASS: Feedback Model
 class Feedback(Base):
     __tablename__ = "feedbacks"
     id = Column(Integer, primary_key=True, index=True)

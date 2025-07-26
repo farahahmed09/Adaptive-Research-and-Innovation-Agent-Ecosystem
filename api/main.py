@@ -23,8 +23,7 @@ from agents.innovation_agent import InnovationAgent
 
 # Import configuration (API keys)
 from config import NEWS_API_KEY, GEMINI_API_KEY
-# GNEWS_API_KEY is not used in this main.py level, but ResearchAgent uses it internally
-# from config import GNEWS_API_KEY # (Optional: if needed for direct main.py logic)
+
 
 # ----------------------------------------------------
 # Pydantic Model for Feedback Request
@@ -37,9 +36,13 @@ class FeedbackRequest(BaseModel):
     comment: str | None = None
 
 
-# NEW: Constants for Refinement Loop
+# ----------------------------------------------------
+# Constants for Refinement Loop
+# ----------------------------------------------------
 REFINEMENT_THRESHOLD = 0.5 # If insight quality is below this, attempt refinement
 MAX_REFINEMENT_ITERATIONS = 1 # Max number of times the orchestration will refine (0 means no refinement, 1 means one refinement)
+
+
 # ----------------------------------------------------
 # 1. FastAPI Application Instance
 # ----------------------------------------------------
@@ -353,7 +356,7 @@ async def get_analysis_insights(query: str = "AI innovation", research_count: in
 @app.get("/agents/innovation/ideas")
 async def get_innovation_ideas(  # THIS MUST BE 'async def'
     query: str = "AI innovation",
-    research_count: int = 5,  # Increased default research_count for better data
+    research_count: int = 15,  # Increased default research_count for better data
     creativity_level: str = "medium"  # Passed to Innovation Agent
 ):
     """
