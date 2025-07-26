@@ -6,15 +6,15 @@ from sqlalchemy.orm import Session
 import os
 import httpx
 import asyncio
-import logging # NEW: For enhanced debugging
-import traceback # NEW: For capturing full error details
-from pydantic import BaseModel # NEW: For defining data structure for feedback
+import logging # For enhanced debugging
+import traceback # For capturing full error details
+from pydantic import BaseModel # For defining data structure for feedback
 
 # Configure basic logging for main.py. Set to DEBUG for maximum verbosity.
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Import database components
-from database.models import SessionLocal, create_db_tables, User, Feedback # NEW: Import Feedback model
+from database.models import SessionLocal, create_db_tables, User, Feedback
 
 # Import agents
 from agents.research_agent import ResearchAgent
@@ -23,13 +23,12 @@ from agents.innovation_agent import InnovationAgent
 
 # Import configuration (API keys)
 from config import NEWS_API_KEY, GEMINI_API_KEY
-# GNEWS_API_KEY is imported by ResearchAgent internally, so not needed here directly
+# GNEWS_API_KEY is not used in this main.py level, but ResearchAgent uses it internally
 # from config import GNEWS_API_KEY # (Optional: if needed for direct main.py logic)
 
 # ----------------------------------------------------
-# Pydantic Model for Feedback Request (NEW)
+# Pydantic Model for Feedback Request
 # ----------------------------------------------------
-# This defines the expected structure of the JSON data coming in for feedback
 class FeedbackRequest(BaseModel):
     query: str
     idea_title: str | None = None
@@ -37,6 +36,10 @@ class FeedbackRequest(BaseModel):
     feedback_type: str # e.g., "positive", "negative", "neutral"
     comment: str | None = None
 
+
+# NEW: Constants for Refinement Loop
+REFINEMENT_THRESHOLD = 0.5 # If insight quality is below this, attempt refinement
+MAX_REFINEMENT_ITERATIONS = 1 # Max number of times the orchestration will refine (0 means no refinement, 1 means one refinement)
 # ----------------------------------------------------
 # 1. FastAPI Application Instance
 # ----------------------------------------------------
@@ -64,7 +67,7 @@ async def startup_event():
     """
     Perform startup tasks: create database tables and initialize agents.
     """
-    try: # Wrap startup in try-except for logging
+    try:
         if not os.path.exists("./local_database.db"):
             create_db_tables()
             logging.info("Database tables created.")
@@ -72,7 +75,6 @@ async def startup_event():
             logging.info("Database file already exists. Tables skipped creation.")
 
         global research_agent_instance
-        # Research Agent now takes NEWS_API_KEY. It internally initializes other clients.
         if NEWS_API_KEY: # Only check NEWS_API_KEY for basic ResearchAgent functionality
             research_agent_instance = ResearchAgent(NEWS_API_KEY) 
             logging.info("Research Agent successfully initialized with multi-source config.")
@@ -243,6 +245,42 @@ async def create_user(username: str, password: str, db: Session = Depends(get_db
 
     return {"message": "User created successfully", "user_id": new_user.id, "username": new_user.username}
 
+@app.post("/feedback/")
+async def submit_feedback(
+    feedback_data: FeedbackRequest,
+    user_id: str = Depends(require_login),
+    db: Session = Depends(get_db)
+):
+    """
+    Receives and stores user feedback on generated ideas.
+    """
+    try:
+        user = db.query(User).filter(User.id == int(user_id)).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found.")
+
+        new_feedback = Feedback(
+            user_id=user.id,
+            query=feedback_data.query,
+            idea_title=feedback_data.idea_title,
+            idea_description_snippet=feedback_data.idea_description_snippet,
+            feedback_type=feedback_data.feedback_type,
+            comment=feedback_data.comment
+        )
+
+        db.add(new_feedback)
+        db.commit()
+        db.refresh(new_feedback)
+
+        logging.info(f"Feedback submitted by user {user.username} (ID: {user.id}). Type: {new_feedback.feedback_type}")
+        return {"message": "Feedback submitted successfully!", "feedback_id": new_feedback.id}
+
+    except Exception as e:
+        logging.error(f"Error submitting feedback: {type(e).__name__}: {e}")
+        logging.exception("Full traceback for feedback submission error:")
+        raise HTTPException(status_code=500, detail=f"Failed to submit feedback: {type(e).__name__}: {e}")
+
+# API Endpoint for the Research Agent
 @app.get("/agents/research/data")
 async def get_research_data(query: str = "latest AI breakthroughs", count: int = 10):
     """
@@ -315,12 +353,13 @@ async def get_analysis_insights(query: str = "AI innovation", research_count: in
 @app.get("/agents/innovation/ideas")
 async def get_innovation_ideas(  # THIS MUST BE 'async def'
     query: str = "AI innovation",
-    research_count: int = 3,  # Number of articles to research
+    research_count: int = 5,  # Increased default research_count for better data
     creativity_level: str = "medium"  # Passed to Innovation Agent
 ):
     """
     API endpoint for the Innovation Agent to get insights from the Analysis Agent,
     generate ideas using Gen AI, and produce a Markdown report.
+    Includes an orchestrated refinement loop for better insights.
     """
     if innovation_agent_instance is None or innovation_agent_instance.model is None:
         raise HTTPException(
@@ -328,80 +367,102 @@ async def get_innovation_ideas(  # THIS MUST BE 'async def'
             detail="Innovation Agent is not configured or initialized. GEMINI_API_KEY might be missing."
         )
 
-    # DEBUGGING BLOCK: Catch and display specific errors from agent pipeline
-    try:
-        # Step 1: Call the Analysis Agent's endpoint to get insights
-        async with httpx.AsyncClient(timeout=30.0) as client:  # Set a 30-second timeout
-            try:
+    final_ideas = []
+    final_markdown_report = ""
+    current_insights = []
+    current_analysis_query = query  # Initialize query for first iteration
+
+    # Orchestrate the refinement loop
+    for iteration in range(MAX_REFINEMENT_ITERATIONS + 1):  # 0 for initial, 1+ for refinement
+        logging.info(f"--- Innovation Agent Orchestration: Iteration {iteration + 1} ---")
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
                 analysis_api_url = (
                     f"http://127.0.0.1:8000/agents/analysis/insights?"
-                    f"query={query}&research_count={research_count}"
+                    f"query={current_analysis_query}&research_count={research_count}"
                 )
-                print(f"Innovation Agent calling Analysis Agent at: {analysis_api_url}")
+                logging.info(f"Innovation Agent calling Analysis Agent at: {analysis_api_url}")
 
                 response = await client.get(analysis_api_url)
-                response.raise_for_status()  # Raise an exception for HTTP errors (4xx, 5xx)
+                response.raise_for_status()
                 analysis_insights_response = response.json()
 
-                insights = analysis_insights_response.get("insights", [])
-                print(f"Innovation Agent received {len(insights)} insights from Analysis Agent.")
-
-            except httpx.HTTPStatusError as e:
-                print(f"Analysis Agent returned HTTP error: {e.response.status_code} - {e.response.text}")
-                print(traceback.format_exc())
-                raise HTTPException(
-                    status_code=e.response.status_code,
-                    detail=f"Error calling Analysis Agent: {e.response.text}"
-                )
-            except httpx.RequestError as e:
-                print(f"Network error calling Analysis Agent: {e}")
-                print(traceback.format_exc())
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Network error when calling Analysis Agent: {e}"
-                )
-            except Exception as e:
-                print(f"Unexpected error when getting insights from Analysis Agent: {type(e).__name__}: {e}")
-                print(traceback.format_exc())
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Unexpected error when getting insights from Analysis Agent: {type(e).__name__}: {e}"
+                new_insights = analysis_insights_response.get("insights", [])
+                logging.info(
+                    f"Innovation Agent received {len(new_insights)} insights from Analysis Agent "
+                    f"for iteration {iteration + 1}."
                 )
 
-        # Step 2: Pass insights to the Innovation Agent to generate ideas
-        generated_ideas = await innovation_agent_instance.generate_ideas_from_insights(
-            insights,
-            creativity_level=creativity_level
-        )
+                if iteration == 0:
+                    current_insights = new_insights
+                else:
+                    current_insights.extend(new_insights)
 
-        # Step 3: Generate the Markdown report
-        markdown_report = await innovation_agent_instance.generate_markdown_report(
-            generated_ideas,
-            query
-        )
+            # Evaluate insight quality
+            overall_analysis_insight = next(
+                (i for i in current_insights if i.get("type") in {"overall_trend_analysis", "overall_analysis_summary"}),
+                None
+            )
+            insight_quality_score = overall_analysis_insight.get("insight_quality_score", 0.0) if overall_analysis_insight else 0.0
+            logging.info(f"Analysis Agent reported insight quality score: {insight_quality_score:.2f}")
 
-        return {
-            "query": query,
-            "generated_ideas": generated_ideas,
-            "ideas_count": len(generated_ideas),
-            "markdown_report": markdown_report
-        }
+            # Step 2: Generate ideas from insights
+            generated_ideas = await innovation_agent_instance.generate_ideas_from_insights(
+                current_insights,
+                creativity_level=creativity_level,
+                refinement_iteration=iteration
+            )
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"CRITICAL ERROR in Innovation Agent endpoint pipeline: {type(e).__name__}: {e}")
-        print(traceback.format_exc())
-        raise HTTPException(
-            status_code=500,
-            detail=f"Internal server error during idea generation: {type(e).__name__}: {e}"
-        )
-    
+            if generated_ideas:
+                final_ideas = generated_ideas
+                final_markdown_report = await innovation_agent_instance.generate_markdown_report(final_ideas, query)
+
+            # Check for need to refine
+            if iteration < MAX_REFINEMENT_ITERATIONS and insight_quality_score < REFINEMENT_THRESHOLD:
+                logging.info(
+                    f"Innovation Agent: Insight quality ({insight_quality_score:.2f}) is below threshold "
+                    f"({REFINEMENT_THRESHOLD}). Triggering refinement for next iteration."
+                )
+                current_analysis_query = (
+                    f"{query} more details on current trends, potential gaps, or contradictions for deeper analysis."
+                )
+            else:
+                logging.info(
+                    f"Innovation Agent: Insight quality ({insight_quality_score:.2f}) is sufficient or max iterations reached. "
+                    f"Concluding orchestration."
+                )
+                break
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            logging.critical(
+                f"CRITICAL ERROR during Innovation Agent orchestration (Iteration {iteration + 1}): {type(e).__name__}: {e}"
+            )
+            logging.critical(traceback.format_exc())
+            raise HTTPException(
+                status_code=500,
+                detail=f"Internal server error during idea generation: {type(e).__name__}: {e}"
+            )
+
+    if not final_ideas:
+        logging.warning("No ideas generated even after refinement attempts.")
+        final_markdown_report = await innovation_agent_instance.generate_markdown_report([], query)
+
+    return {
+        "query": query,
+        "generated_ideas": final_ideas,
+        "ideas_count": len(final_ideas),
+        "markdown_report": final_markdown_report
+    }
+
+
 @app.post("/feedback/")
 async def submit_feedback(
-    feedback_data: FeedbackRequest, # Data comes in as a Pydantic model
-    user_id: str = Depends(require_login), # Requires authenticated user
-    db: Session = Depends(get_db) # Requires database session
+    feedback_data: FeedbackRequest,  # Data comes in as a Pydantic model
+    user_id: str = Depends(require_login),  # Requires authenticated user
+    db: Session = Depends(get_db)  # Requires database session
 ):
     """
     Receives and stores user feedback on generated ideas.
@@ -426,19 +487,26 @@ async def submit_feedback(
         db.commit()
         db.refresh(new_feedback)
 
-        logging.info(f"Feedback submitted by user {user.username} (ID: {user.id}). Type: {new_feedback.feedback_type}")
-        return {"message": "Feedback submitted successfully!", "feedback_id": new_feedback.id}
+        print(f"Feedback submitted by user {user.username} (ID: {user.id}). Type: {new_feedback.feedback_type}")
+        return {
+            "message": "Feedback submitted successfully!",
+            "feedback_id": new_feedback.id
+        }
 
     except Exception as e:
-        logging.error(f"Error submitting feedback: {type(e).__name__}: {e}")
-        logging.exception("Full traceback for feedback submission error:")
-        raise HTTPException(status_code=500, detail=f"Failed to submit feedback: {type(e).__name__}: {e}")
-    
+        print(f"Error submitting feedback: {type(e).__name__}: {e}")
+        print(traceback.format_exc())
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to submit feedback: {type(e).__name__}: {e}"
+        )
+
+
 # ----------------------------------------------------
 # 8. Running the Application (Typically via Uvicorn)
 # ----------------------------------------------------
 # This block is commented out because Uvicorn is typically run via command line:
-# use this command to run: uvicorn api.main:app --reload
+# Use this command to run: uvicorn api.main:app --reload
 # if __name__ == "__main__":
-#     import uvicorn
-#     uvicorn.run(app, host="0.0.0.0", port=8000)
+#     import uvicorn
+#     uvicorn.run(app, host="0.0.0.0", port=8000)

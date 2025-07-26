@@ -22,8 +22,9 @@ class InnovationAgent:
             self.model = genai.GenerativeModel('gemini-2.5-flash') # Using 'gemini-2.5-flash' for stability
             print("Innovation Agent initialized with Gemini client.")
 
-    async def generate_ideas_from_insights(self, insights: list, creativity_level: str = "medium"):
-        print(f"Innovation Agent: Generating ideas from {len(insights)} insights with {creativity_level} creativity...")
+    async def generate_ideas_from_insights(self, insights: list, creativity_level: str = "medium", refinement_iteration: int = 0): # ADDED: refinement_iteration
+        print(f"Innovation Agent: Generating ideas (Iteration {refinement_iteration}) from {len(insights)} insights with {creativity_level} creativity...") # UPDATED print message
+
 
         if not self.model:
             print("Innovation Agent: Gemini model not initialized due to missing API key. Cannot generate ideas.")
