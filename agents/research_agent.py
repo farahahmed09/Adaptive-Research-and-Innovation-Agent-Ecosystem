@@ -1,10 +1,11 @@
 # agents/research_agent.py
 
-# UPDATED: Import NewsApiClient and ArxivClient ONLY
-from utils.external_api_client import NewsApiClient, ArxivClient
+# UPDATED: Import GNewsClient alongside NewsApiClient and ArxivClient
+from utils.external_api_client import NewsApiClient, ArxivClient, GNewsClient
 import asyncio
 import random # For simple delay
 import time # For simple delay
+from config import GNEWS_API_KEY # NEW: Import GNEWS_API_KEY from config.py
 
 class ResearchAgent:
     """
@@ -12,9 +13,11 @@ class ResearchAgent:
     from external sources and performing initial preprocessing.
     """
     def __init__(self, news_api_key: str):
+        # Initialize all external API clients
         self.news_client = NewsApiClient(news_api_key)
-        self.arxiv_client = ArxivClient() # NEW: Initialize ArxivClient
-        print("Research Agent initialized with data sources (NewsAPI, ArXiv).") # UPDATED message
+        self.arxiv_client = ArxivClient()
+        self.gnews_client = GNewsClient(GNEWS_API_KEY) # NEW: Initialize GNewsClient with GNEWS_API_KEY
+        print("Research Agent initialized with data sources (NewsAPI, ArXiv, GNews).") # UPDATED message
 
     async def gather_and_preprocess_data(self, query: str = "AI trends", count: int = 5):
         """
@@ -35,9 +38,9 @@ class ResearchAgent:
 
         remaining_total_count = max(0, count - news_api_target_count)
         
-        # Distribute remaining count among the other 1 source (ArXiv)
-        # Ensure at least 1 item for ArXiv if remaining_total_count allows, max 5
-        arxiv_individual_count = max(1, min(remaining_total_count, 5)) # Only one other source
+        # Distribute remaining count among the other 2 sources (ArXiv, GNews)
+        # Ensure at least 1 item for each if remaining_total_count allows, max 5
+        other_sources_individual_count = max(1, min(remaining_total_count // 2, 5)) # Now 2 other sources
         # --- END Logic ---
 
         # --- Fetch from NewsAPI (with fixed count and robustness) ---
@@ -50,13 +53,23 @@ class ResearchAgent:
             pass # Continue if this source fails
         await asyncio.sleep(random.uniform(0.5, 1.5)) # Small delay
 
-        # --- Fetch from ArXiv (ADDED with robustness) ---
+        # --- Fetch from ArXiv (with robustness) ---
         try:
-            arxiv_data = await self.arxiv_client.search_articles(query=query, limit=arxiv_individual_count)
+            arxiv_data = await self.arxiv_client.search_articles(query=query, limit=other_sources_individual_count)
             all_processed_data.extend(arxiv_data)
-            print(f"  - Fetched {len(arxiv_data)} items from ArXiv (requested {arxiv_individual_count}).")
+            print(f"  - Fetched {len(arxiv_data)} items from ArXiv (requested {other_sources_individual_count}).")
         except Exception as e:
             print(f"ERROR: ArXiv fetch failed for query '{query}': {e}")
+            pass
+        await asyncio.sleep(random.uniform(0.5, 1.5)) # Small delay
+
+        # --- Fetch from GNews API (ADDED with robustness) ---
+        try:
+            gnews_data = await self.gnews_client.search_articles(query=query, page_size=other_sources_individual_count) # Use calculated count
+            all_processed_data.extend(gnews_data)
+            print(f"  - Fetched {len(gnews_data)} items from GNews API (requested {other_sources_individual_count}).")
+        except Exception as e:
+            print(f"ERROR: GNews API fetch failed for query '{query}': {e}")
             pass
         await asyncio.sleep(random.uniform(0.5, 1.5)) # Small delay
 
@@ -68,14 +81,18 @@ if __name__ == "__main__":
     import asyncio
     import sys
     import os
+    # Add the parent directory (project root) to sys.path for testing
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-    from config import NEWS_API_KEY # Only NEWS_API_KEY needed for this version
+    # UPDATED: Import GNEWS_API_KEY for testing
+    from config import NEWS_API_KEY, GNEWS_API_KEY 
 
     async def test_agent():
-        if NEWS_API_KEY:
-            agent = ResearchAgent(NEWS_API_KEY)
-            # Test query relevant for both sources
-            data = await agent.gather_and_preprocess_data(query="artificial intelligence in medicine", count=10)
+        # UPDATED: Check both API keys
+        if NEWS_API_KEY and GNEWS_API_KEY: 
+            agent = ResearchAgent(NEWS_API_KEY) # Pass NEWS_API_KEY. GNewsClient now uses GNEWS_API_KEY from config.
+            
+            # Test query relevant for all sources, increase count for 3 sources
+            data = await agent.gather_and_preprocess_data(query="artificial intelligence in medicine", count=15)
             for i, item in enumerate(data):
                 print(f"\n--- Processed Item {i+1} ---")
                 print(f"Source: {item.get('source', 'N/A')}")
@@ -83,6 +100,6 @@ if __name__ == "__main__":
                 print(f"Summary: {item.get('summary', 'N/A')[:100]}...")
                 print(f"URL: {item.get('url', 'N/A')}")
         else:
-            print("NEWS_API_KEY not found in .env. Cannot test Research Agent fully.")
+            print("NEWS_API_KEY or GNEWS_API_KEY not found in .env. Cannot test Research Agent fully.")
 
     asyncio.run(test_agent())

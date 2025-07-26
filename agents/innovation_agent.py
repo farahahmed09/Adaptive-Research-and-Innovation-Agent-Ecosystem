@@ -47,7 +47,7 @@ class InnovationAgent:
                     "You are an expert innovation specialist. Your task is to generate concise, actionable research ideas or improvement proposals based on provided market and trend analysis insights. Focus on novelty and feasibility."
                     "\n\nHere are the latest analysis insights:\n"
                     f"{insights_text}\n\n"
-                    "Based on these insights, generate 3-5 distinct and innovative research ideas or improvement proposals. For each idea, provide a 'title', a 'brief_description', and 'potential_impact'. Format your response as a JSON array of objects."
+                    "Based on these insights, generate 7 to 10 distinct and innovative research ideas or improvement proposals. For each idea, provide a 'title', a 'brief_description', and 'potential_impact'. Format your response as a JSON array of objects."
                     "\n\nExample desired JSON format:\n"
                     "[\n  {\n    \"title\": \"Example Title\",\n    \"brief_description\": \"Example description for the idea.\",\n    \"potential_impact\": \"Example assessment of the idea's impact.\"\n  }\n]"
                 ]}

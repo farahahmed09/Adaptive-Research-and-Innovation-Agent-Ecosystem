@@ -3,7 +3,7 @@
 import requests
 import time # For basic rate limiting/backoff
 import random # For simple delay
-import xml.etree.ElementTree as ET # NEW: For parsing XML (ArXiv uses Atom feed)
+import xml.etree.ElementTree as ET # For parsing XML (ArXiv uses Atom feed)
 
 class NewsApiClient:
     """
@@ -58,7 +58,59 @@ class NewsApiClient:
             return []
 
 
-# NEW CLIENT: ArXiv API Client (ONLY additional source)
+# NEW CLIENT: GNews API Client (ADDED)
+class GNewsClient:
+    """
+    Client for interacting with the GNews API.
+    Similar to NewsAPI, providing news articles.
+    """
+    def __init__(self, api_key: str):
+        self.base_url = "https://gnews.io/api/v4/search?"
+        self.api_key = api_key
+        if not self.api_key:
+            print("WARNING: GNews API key is missing. GNewsClient may not function correctly.")
+
+    async def search_articles(self, query: str, lang: str = "en", page_size: int = 5):
+        print(f"GNewsClient: Searching articles for query '{query}'...")
+        params = {
+            "q": query,
+            "lang": lang,
+            "max": page_size, # GNews uses 'max' instead of 'pageSize'
+            "token": self.api_key # GNews uses 'token' instead of 'apiKey'
+        }
+
+        try:
+            response = requests.get(self.base_url, params=params)
+            response.raise_for_status()
+            data = response.json()
+
+            if data.get("error"):
+                print(f"GNews API error: {data.get('error')} - {data.get('errors')}")
+                return []
+
+            articles = data.get("articles", [])
+            processed_articles = []
+            for article in articles:
+                processed_articles.append({
+                    "source": "GNewsAPI",
+                    "title": article.get('title'),
+                    "summary": article.get('description'),
+                    "content": article.get('content'),
+                    "url": article.get('url'),
+                    "published_date": article.get('publishedAt'),
+                    "authors": article.get('source', {}).get('name') # GNews has source.name as author
+                })
+            return processed_articles
+
+        except requests.exceptions.RequestException as e:
+            print(f"GNews API request error: {e}")
+            return []
+        except Exception as e:
+            print(f"An unknown error occurred during GNews API call: {e}")
+            return []
+
+
+# ArXiv API Client (from your previous code)
 class ArxivClient:
     """
     Client for interacting with the ArXiv API.
@@ -127,7 +179,7 @@ class ArxivClient:
 # Example usage for testing (Optional - for direct test of this file)
 if __name__ == "__main__":
     import asyncio
-    from config import NEWS_API_KEY
+    from config import NEWS_API_KEY, GNEWS_API_KEY # UPDATED: Ensure GNEWS_API_KEY is imported for test
     
     async def test_clients():
         print("\n--- Testing NewsAPI Client ---")
@@ -136,6 +188,13 @@ if __name__ == "__main__":
         print(f"Fetched {len(news_articles)} news articles.")
         for article in news_articles:
             print(f"- [NewsAPI] {article.get('title')}")
+
+        print("\n--- Testing GNews API Client ---")
+        gnews_client = GNewsClient(GNEWS_API_KEY)
+        gnews_articles = await gnews_client.search_articles(query="AI in medicine", page_size=2)
+        print(f"Fetched {len(gnews_articles)} GNews articles.")
+        for article in gnews_articles:
+            print(f"- [GNewsAPI] {article.get('title')}")
 
         print("\n--- Testing ArXiv Client ---")
         arxiv_client = ArxivClient()

@@ -1,3 +1,7 @@
+<<<<<<< HEAD
+=======
+
+>>>>>>> 0290b71 (add GNEWS : a new third party)
 # Gen AI Adaptive Research & Innovation Agent Ecosystem
 
 ## Project Overview
@@ -73,5 +77,10 @@ Follow these steps to get your **Gen AI Adaptive Research & Innovation Agent Eco
 ### 1. Clone the Repository
 
 ```bash
+<<<<<<< HEAD
 git clone https://github.com/farahahmed09/Adaptive-Research-and-Innovation-Agent-Ecosystem.git
 cd Adaptive-Research-and-Innovation-Agent-Ecosystem # e.g., cd Gen-AI-Adaptive-Research-Innovation-Agent-Ecosystem
+=======
+git clone <your_repository_url_here>
+cd <your_repository_name> # e.g., cd Gen-AI-Adaptive-Research-Innovation-Agent-Ecosystem
+>>>>>>> 0290b71 (add GNEWS : a new third party)
